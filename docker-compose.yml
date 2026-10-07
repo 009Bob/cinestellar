@@ -1,0 +1,56 @@
+# Cinestellar: explore your Plex movie library as a graph.
+#
+#   1. Put this file and .env (copied from .env.example) in a folder.
+#   2. Set NEO4J_PASSWORD in .env.
+#   3. docker compose up -d   and open http://<this machine>:8080
+#
+# Cinestellar runs its OWN Neo4j (Community edition, no license needed) in its own container and
+# volume. It does not touch any other Neo4j you have, and no Neo4j ports are opened on the host.
+# To build the image from source instead of pulling it, see docker-compose.build.yml.
+services:
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    environment:
+      # Only read the very first time the volume is created. See README "Changing the Neo4j password".
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env (8+ characters)}
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP:-1G}
+    volumes:
+      - neo4j_data:/data
+
+  app:
+    image: ghcr.io/009bob/cinestellar:${CINESTELLAR_TAG:-latest}
+    restart: unless-stopped
+    # No health gate: the app starts immediately and the site shows "waiting for the graph
+    # database" until Neo4j is ready.
+    depends_on:
+      - neo4j
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env (8+ characters)}
+      PORT: 8080
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      MAX_CAST: ${MAX_CAST:-30}
+      PLEX_FETCH_BATCH: ${PLEX_FETCH_BATCH:-10}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - app_config:/app/data
+
+  # Throwaway, empty Neo4j for scripts/smoke.js. Only starts with `--profile test`, keeps its data
+  # in memory, and never touches your real graph. See CONTRIBUTING.md.
+  neo4j-test:
+    image: neo4j:5-community
+    profiles: ["test"]
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env (8+ characters)}
+      NEO4J_server_memory_heap_max__size: 512M
+    tmpfs:
+      - /data
+
+volumes:
+  neo4j_data:
+  app_config:

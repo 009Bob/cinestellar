@@ -1,0 +1,44 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Please **remove your Plex token, TMDB key and any private addresses** from anything you paste.
+  - type: input
+    id: version
+    attributes:
+      label: Cinestellar version
+      description: Shown at the bottom of the sidebar (e.g. v0.8.0)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+  - type: input
+    id: platform
+    attributes:
+      label: Where it runs
+      placeholder: e.g. Docker Desktop on Windows 11, Synology DSM 7, Unraid, Raspberry Pi 5
+  - type: input
+    id: library
+    attributes:
+      label: Library size (roughly)
+      placeholder: e.g. 1,200 movies
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Output of `docker compose logs app --tail 100`
+      render: text

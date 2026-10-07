@@ -1,0 +1,7 @@
+# Build the app image from this source folder instead of pulling the published one:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+services:
+  app:
+    image: cinestellar:local
+    build: .
