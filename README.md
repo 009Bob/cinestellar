@@ -5,6 +5,12 @@ from your own Plex Media Server into a graph database and serves a website on yo
 you can see how everything connects: who acted with whom, which directors keep working with the
 same writers, which studio made which franchise, and how two films you love are linked.
 
+
+https://github.com/user-attachments/assets/f80a1cc5-8443-4f68-9269-83f6088b4808
+
+
+
+
 ![A person's films with cast photos, studio logos and box art](docs/images/graph.png)
 
 [![CI](https://github.com/009bob/cinestellar/actions/workflows/ci.yml/badge.svg)](https://github.com/009bob/cinestellar/actions/workflows/ci.yml)
