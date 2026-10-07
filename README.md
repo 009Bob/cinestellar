@@ -146,8 +146,8 @@ Your graph and settings live in Docker volumes and are kept. The [changelog](CHA
 when a release needs a re-import to fill in something new. To stay on a specific version, set
 `CINESTELLAR_TAG=0.8.0` (for example) in `.env`.
 
-**Updating from "Plex Graph"** (the name before 0.8.0): keep using the same folder, because Docker
-names the data volumes after it. Replace `docker-compose.yml` with the new one and keep your `.env`.
+
+Replace `docker-compose.yml` with the new one and keep your `.env`.
 `NEO4J_PASSWORD` must be the password your database was created with: if your old `.env` had none,
 set `NEO4J_PASSWORD=plexgraph-change-me` (the old default), and change it afterwards as described
 under [Settings](#settings) if you like. Then run the two commands above. If you used `docker compose up --build`
