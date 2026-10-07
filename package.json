@@ -32,8 +32,8 @@
     "node": ">=20.3"
   },
   "dependencies": {
-    "express": "^4.21.0",
+    "express": "^5.2.1",
     "force-graph": "^1.52.0",
-    "neo4j-driver": "^5.26.0"
+    "neo4j-driver": "^6.2.0"
   }
 }
