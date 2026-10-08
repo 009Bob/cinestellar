@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cinestellar</title>
+  <meta name="description" content="Explore your Plex movie library as a graph of films, cast, crew, studios and franchises.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1><img src="favicon.svg" alt="" width="20" height="20"> Cinestellar</h1>
+      <div id="stats" class="stats" aria-live="polite"></div>
+      <div class="spacer"></div>
+      <button id="btn-overview" class="btn">Genre map</button>
+      <button id="btn-settings" class="btn">Libraries</button>
+    </header>
+
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <aside class="sidebar" aria-label="Search and browse">
+      <section>
+        <label class="field-label" for="search">Search your library</label>
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="Movie, actor, director, genre…  ( / )" autocomplete="off"
+                 role="combobox" aria-expanded="false" aria-controls="search-results">
+          <ul id="search-results" class="results" role="listbox" hidden></ul>
+        </div>
+      </section>
+
+      <section>
+        <h2>Browse</h2>
+        <div class="tabs" id="browse-tabs" role="tablist">
+          <button role="tab" data-label="Person" aria-selected="true" title="Anyone, in any role">People</button>
+          <button role="tab" data-label="Person" data-role="ACTED_IN" aria-selected="false">Cast</button>
+          <button role="tab" data-label="Person" data-role="DIRECTED" aria-selected="false">Directors</button>
+          <button role="tab" data-label="Person" data-role="WROTE" aria-selected="false">Screenplay</button>
+          <button role="tab" data-label="Person" data-role="PRODUCED" aria-selected="false">Producers</button>
+          <button role="tab" data-label="Genre" aria-selected="false">Genres</button>
+          <button role="tab" data-label="Collection" aria-selected="false">Collections</button>
+          <button role="tab" data-label="Country" aria-selected="false">Countries</button>
+          <button role="tab" data-label="Studio" aria-selected="false">Studios</button>
+        </div>
+        <p id="browse-hint" class="hint" hidden></p>
+        <ol id="browse-list" class="browse"></ol>
+      </section>
+
+      <section aria-labelledby="filters-h">
+        <div class="section-head">
+          <h2 id="filters-h">Filters <span id="filter-count" class="badge" hidden></span></h2>
+          <button id="btn-clear-filters" class="linkish" type="button" hidden>Clear all</button>
+        </div>
+        <div id="filter-body"><p class="hint">Import a library to filter it.</p></div>
+        <p id="filter-status" class="hint" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <h2>How are two things connected?</h2>
+        <p class="hint">Pick two people or movies; we find the shortest chain of shared films.</p>
+        <div class="pair">
+          <div class="search-wrap"><input id="path-a" type="search" placeholder="From…" autocomplete="off" aria-label="From"><ul class="results" id="path-a-results" hidden></ul></div>
+          <div class="search-wrap"><input id="path-b" type="search" placeholder="To…" autocomplete="off" aria-label="To"><ul class="results" id="path-b-results" hidden></ul></div>
+          <button id="btn-path" class="btn primary" disabled>Find connection</button>
+        </div>
+        <ol id="path-chain" class="chain" aria-live="polite"></ol>
+      </section>
+
+      <section>
+        <h2>Legend</h2>
+        <ul id="legend" class="legend"></ul>
+      </section>
+
+      <footer class="about">
+        <p><strong>Cinestellar</strong> <span id="app-version"></span> ·
+          <a href="https://github.com/009bob/cinestellar" target="_blank" rel="noopener noreferrer">GitHub</a> ·
+          <a href="https://github.com/009bob/cinestellar/issues" target="_blank" rel="noopener noreferrer">Report a problem</a></p>
+        <p>Free software under the GNU GPL v3. Not affiliated with or endorsed by Plex, Inc.</p>
+        <p>This product uses the TMDB API but is not endorsed or certified by
+          <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>.</p>
+      </footer>
+    </aside>
+
+    <main class="stage">
+      <div class="viewbar">
+        <div class="viewbar-main">
+          <div id="view-desc" class="view-desc" aria-live="polite"></div>
+          <div id="view-filters" class="view-filters"></div>
+        </div>
+        <div class="toolbar">
+          <div class="seg" role="group" aria-label="Layout">
+            <button id="mode-graph" class="btn small" type="button" aria-pressed="true">Graph</button>
+            <button id="mode-timeline" class="btn small" type="button" aria-pressed="false" title="Movies by release year, with decades">Timeline</button>
+          </div>
+          <button id="btn-unfold" class="btn small" type="button" title="Keep opening connections, one ring at a time">Unfold</button>
+          <button id="btn-back" class="btn small" disabled title="Back (Alt+←)">← Back</button>
+          <button id="btn-fit" class="btn small" title="Zoom to the selection and its connections (Shift-click: everything)">Fit</button>
+          <button id="btn-clear" class="btn small">Clear</button>
+          <label class="toggle btn small"><input type="checkbox" id="toggle-posters" checked> Pictures</label>
+          <label class="toggle btn small" title="Show genres and the lines linking movies to them"><input type="checkbox" id="toggle-Genre" checked> Genre links</label>
+          <label class="toggle btn small" title="Show countries (where Plex says a film was made) and the lines linking movies to them"><input type="checkbox" id="toggle-Country" checked> Country links</label>
+        </div>
+      </div>
+      <div class="graph-wrap">
+        <div id="busy" class="busy" role="progressbar" aria-label="Updating the graph" hidden><span></span></div>
+        <div id="graph" class="graph" role="img" aria-label="Interactive graph of your library. Use the search and the connections list to explore with a keyboard."></div>
+        <div id="empty" class="empty" hidden>
+          <p>Nothing on the canvas yet.</p>
+          <p class="hint">Search for something, pick from Browse, or open the genre map.</p>
+        </div>
+      </div>
+    </main>
+
+    <aside class="detail" id="detail" aria-label="Details" hidden></aside>
+  </div>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal-card">
+      <h2 id="modal-title">Connect to Plex</h2>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/vendor/force-graph.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

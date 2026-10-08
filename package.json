@@ -1,0 +1,39 @@
+{
+  "name": "cinestellar",
+  "version": "0.8.0",
+  "private": true,
+  "description": "Explore your Plex movie library as a graph of films, cast, crew, studios and franchises (self-hosted, Neo4j)",
+  "keywords": [
+    "plex",
+    "neo4j",
+    "graph",
+    "movies",
+    "self-hosted",
+    "docker",
+    "tmdb"
+  ],
+  "homepage": "https://github.com/009bob/cinestellar",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/009bob/cinestellar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/009bob/cinestellar/issues"
+  },
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "src/server/index.js",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "test": "node --test test/*.test.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "engines": {
+    "node": ">=20.3"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "force-graph": "^1.52.0",
+    "neo4j-driver": "^5.26.0"
+  }
+}

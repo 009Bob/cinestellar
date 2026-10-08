@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest an idea
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to do?
+      description: Describe the question you want to answer about your library, or the problem you hit.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How could it work?
