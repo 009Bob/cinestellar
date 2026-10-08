@@ -342,6 +342,16 @@ try {
     } finally {
       await q('MATCH (n:SomethingElse) DELETE n');
     }
+    // Look-alikes count as foreign too: our label without pg = true, or pg = true on a label we never use.
+    for (const create of ['CREATE (:Movie {id: "theirs", pg: false})', 'CREATE (:Movie {id: "theirs2", pg: "PG"})', 'CREATE (:Rating {pg: true})']) {
+      await q(create);
+      try {
+        assert.equal(await store.isDedicated(), false, create);
+      } finally {
+        await q('MATCH (n) WHERE n.id IN ["theirs", "theirs2"] OR n:Rating DETACH DELETE n');
+      }
+    }
+    assert.equal(await store.isDedicated(), true);
   });
 
   await step('unticking a library removes its movies; orphans are cleaned', async () => {

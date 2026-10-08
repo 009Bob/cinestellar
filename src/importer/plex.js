@@ -73,7 +73,13 @@ export class PlexClient {
     }
     if (res.status === 401) throw new PlexError('Plex rejected the token (401 Unauthorized)', 401);
     if (!res.ok) throw new PlexError(`Plex returned HTTP ${res.status} for ${u.pathname}`, res.status);
-    return raw ? res : res.json();
+    if (raw) return res;
+    try {
+      return await res.json();
+    } catch {
+      // Don't echo whatever else answered at that address.
+      throw new PlexError(`${this.baseUrl} does not look like a Plex Media Server`, 502);
+    }
   }
 
   async identity() {

@@ -82,7 +82,7 @@ const PNG_1PX = Buffer.from(
  *   ('thin' = Plex leaves the cast out of combined responses)
  * @param {number} [opts.detailDelayMs]  slow down every metadata response
  */
-export async function startMockPlex({ failDetailFor = [], libraries, omitTotalSize = false, posterMode = 'normal', rootMode = 'plex', batchMode = 'ok', serverId = SERVER_ID, extraMovies = 0, detailDelayMs = 0, collectionsMode = 'ok' } = {}) {
+export async function startMockPlex({ failDetailFor = [], libraries, omitTotalSize = false, posterMode = 'normal', rootMode = 'plex', batchMode = 'ok', serverId = SERVER_ID, extraMovies = 0, detailDelayMs = 0, collectionsMode = 'ok', listDelayMs = 0 } = {}) {
   const movies = [
     ...MOVIES,
     ...Array.from({ length: extraMovies }, (_, i) => ({ ratingKey: String(1000 + i), title: `Filler ${i}`, Genre: [{ tag: 'Filler' }] })),
@@ -92,9 +92,9 @@ export async function startMockPlex({ failDetailFor = [], libraries, omitTotalSi
     { key: '1', title: 'Movies', type: 'movie' },
     { key: '2', title: 'TV Shows', type: 'show' },
   ];
-  const server = http.createServer((req, res) => {
+  const handler = (req, res) => {
     const url = new URL(req.url, 'http://x');
-    hits.push(url.pathname);
+    if (!req.delayed) hits.push(url.pathname);
     const json = (status, body) => {
       res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(body));
@@ -132,6 +132,12 @@ export async function startMockPlex({ failDetailFor = [], libraries, omitTotalSi
       });
     }
     const all = /^\/library\/sections\/(\d+)\/all$/.exec(url.pathname);
+    if (all && listDelayMs && !req.delayed) {
+      req.delayed = true;
+      const t = setTimeout(() => handler(req, res), listDelayMs);
+      req.on('close', () => clearTimeout(t));
+      return;
+    }
     if (all) {
       const start = Number(url.searchParams.get('X-Plex-Container-Start') ?? 0);
       const size = Number(url.searchParams.get('X-Plex-Container-Size') ?? 50);
@@ -183,7 +189,8 @@ export async function startMockPlex({ failDetailFor = [], libraries, omitTotalSi
       return res.end(PNG_1PX);
     }
     json(404, {});
-  });
+  };
+  const server = http.createServer(handler);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const { port } = server.address();
   return {

@@ -223,7 +223,14 @@ export class GraphStore {
   /** True when the database holds nothing that Cinestellar did not create. */
   async isDedicated() {
     return this.#read(async (tx) => {
-      const res = await tx.run('MATCH (n) WHERE n.pg IS NULL RETURN 1 AS hit LIMIT 1');
+      // Ours means exactly `pg = true` on one of our labels. Anything else (no pg, pg = false,
+      // pg = 'PG' from someone's movie dataset, or a label we never create) is someone else's.
+      const res = await tx.run(
+        `MATCH (n)
+         WHERE coalesce(n.pg = true, false) = false OR NOT any(l IN labels(n) WHERE l IN $labels)
+         RETURN 1 AS hit LIMIT 1`,
+        { labels: LABELS },
+      );
       return res.records.length === 0;
     });
   }
@@ -263,7 +270,7 @@ export class GraphStore {
     const ids = movies.map((m) => m.id);
     await this.#write(async (tx) => {
       // Drop old relationships first so tags removed in Plex disappear from the graph.
-      await tx.run('UNWIND $ids AS id MATCH (:Movie {id: id})-[r]-() DELETE r', { ids });
+      await tx.run('UNWIND $ids AS id MATCH (m:Movie {id: id})-[r]-() WHERE m.pg = true DELETE r', { ids });
       await tx.run(
         `UNWIND $movies AS m
          MERGE (mv:Movie {id: m.id})
@@ -292,7 +299,7 @@ export class GraphStore {
   async deleteStale({ serverId, libraryKey, runId }) {
     await this.#write((tx) =>
       tx.run(
-        'MATCH (m:Movie {serverId: $serverId, libraryKey: $libraryKey}) WHERE m.runId <> $runId DETACH DELETE m',
+        'MATCH (m:Movie {serverId: $serverId, libraryKey: $libraryKey}) WHERE m.pg = true AND m.runId <> $runId DETACH DELETE m',
         { serverId, libraryKey, runId },
       ),
     );

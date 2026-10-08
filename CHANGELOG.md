@@ -16,6 +16,14 @@ filled in by an import.
 - `NEO4J_PASSWORD` is now required (no default password).
 - About footer with version, links, and the TMDB and Plex notices. `/healthz` endpoint and a
   Docker health check.
+- Security hardening from a pre-release review: the UI can't be framed by other sites and has a
+  strict Content-Security-Policy; other websites can no longer call the API, even with simple
+  GETs; repeated wrong passwords are throttled; connecting to something that isn't Plex no longer
+  echoes what answered; Sign in with Plex picks the exact server chosen and, when re-finding a
+  moved server, requires the same ownership; the "dedicated database" check and every delete
+  only touch nodes Cinestellar created; odd Plex metadata is coerced instead of failing a batch;
+  a failed save stops TMDB lookups cleanly; cancelling during the library listing reports
+  "cancelled"; release workflows don't keep the GitHub token in the checkout.
 
 ## 0.7.1
 
