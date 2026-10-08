@@ -22,6 +22,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Tag matches package.json
         run: |
@@ -95,5 +97,12 @@ jobs:
           # A tag like v0.9.0-rc.1 becomes a pre-release, so /releases/latest keeps pointing at a stable one.
           pre=()
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then pre=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" "${pre[@]}" --title "Cinestellar $GITHUB_REF_NAME" --notes-file notes.md \
-            docker-compose.yml env.example
+          # If the release was already made by hand on github.com (which also creates the tag),
+          # fill it in instead of failing.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" "${pre[@]}" --title "Cinestellar $GITHUB_REF_NAME" --notes-file notes.md
+            gh release upload "$GITHUB_REF_NAME" docker-compose.yml env.example --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${pre[@]}" --title "Cinestellar $GITHUB_REF_NAME" --notes-file notes.md \
+              docker-compose.yml env.example
+          fi

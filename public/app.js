@@ -2102,7 +2102,7 @@ function signinSection(err) {
     err.textContent = '';
     status.textContent = `Connecting to ${server.name}…`;
     try {
-      const r = await api(`/api/plex/signin/${encodeURIComponent(id)}/choose`, { method: 'POST', body: { serverId: server.serverId } });
+      const r = await api(`/api/plex/signin/${encodeURIComponent(id)}/choose`, { method: 'POST', body: { choice: server.choice, serverId: server.serverId } });
       lastStatus = await refreshStatus();
       libraryStep(r.libraries, r.server.name);
     } catch (ex) {

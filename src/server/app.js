@@ -19,6 +19,19 @@ export { VERSION };
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../public');
 const vendorDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../node_modules/force-graph/dist');
 
+// The UI only loads its own scripts, styles and pictures, and talks only to this server.
+const PAGE_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -107,10 +120,24 @@ export function createApp({
   app.get('/healthz', (req, res) => res.type('text/plain').send('ok'));
 
   if (password) {
+    // Slow down password guessing: after 10 wrong tries from one address, refuse it for a minute.
+    const failures = new Map(); // ip -> { count, until }
     app.use((req, res, next) => {
+      const ip = req.socket.remoteAddress ?? '';
+      const now = Date.now();
+      const f = failures.get(ip);
+      if (f && f.until > now) return res.status(429).type('text/plain').send('Too many wrong passwords; try again in a minute');
       const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
       const supplied = m ? Buffer.from(m[1], 'base64').toString().split(':').slice(1).join(':') : '';
-      if (m && safeEqual(supplied, password)) return next();
+      if (m && safeEqual(supplied, password)) {
+        failures.delete(ip);
+        return next();
+      }
+      if (m) {
+        const count = (f && now - f.last < 10 * 60000 ? f.count : 0) + 1;
+        failures.set(ip, { count, last: now, until: count >= 10 ? now + 60000 : 0 });
+        if (failures.size > 10000) failures.clear(); // never grows without bound
+      }
       res.set('WWW-Authenticate', 'Basic realm="Cinestellar"').status(401).send('Password required');
     });
   }
@@ -118,6 +145,19 @@ export function createApp({
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'no-referrer');
+    // Other sites may not frame the UI (clickjacking) or load its responses.
+    res.set('X-Frame-Options', 'DENY');
+    res.set('Cross-Origin-Resource-Policy', 'same-origin');
+    res.set('Content-Security-Policy', PAGE_CSP);
+    next();
+  });
+
+  // Other websites you visit must not be able to use the API, even with simple GETs (an <img>
+  // pointed at /api/image would otherwise reveal what is in your library). Browsers label every
+  // request with where it came from; anything not from this site itself is refused.
+  app.use('/api', (req, res, next) => {
+    const site = req.headers['sec-fetch-site'];
+    if (site && site !== 'same-origin' && site !== 'none') return next(httpError(403, 'Cross-site requests are not allowed'));
     next();
   });
 
@@ -179,7 +219,7 @@ export function createApp({
   }));
 
   /** Checks a server address + token and saves them. Returns what the setup screen shows next. */
-  async function connectTo({ url, token, accountToken = null }) {
+  async function connectTo({ url, token, accountToken = null, owned = null }) {
     let plex;
     try {
       plex = makePlex({ url, token });
@@ -202,6 +242,7 @@ export function createApp({
       // The plex.tv sign-in is kept (server-side only) so a server that moves can be found again.
       plexSignedIn: Boolean(accountToken),
       plexAccountToken: accountToken ?? '',
+      plexOwned: owned,
       // Library keys like "1" are reused by every server, so never carry choices across servers.
       ...(sameServer ? {} : { libraries: [] }),
     });
@@ -262,19 +303,23 @@ export function createApp({
   app.post('/api/plex/signin', wrap(async (req, res) => {
     for (const [k, v] of signins) if (v.deadline < Date.now()) signins.delete(k);
     if (signins.size >= SIGNIN_MAX) throw httpError(429, 'Too many sign-ins are in progress. Try again in a few minutes.');
+    // Hold the slot before waiting on plex.tv, so a burst of requests can't overshoot the cap.
+    const id = crypto.randomUUID();
+    signins.set(id, { pin: null, deadline: Date.now() + 60000, accountToken: null, servers: null });
     let pin;
     try {
       pin = await (await plexTv()).createPin();
     } catch (err) {
+      signins.delete(id);
       throw httpError(502, err.message);
     }
-    const id = crypto.randomUUID();
     signins.set(id, { pin, deadline: Date.now() + pin.expiresIn * 1000, accountToken: null, servers: null });
     res.json({ id, url: pin.url, expiresIn: pin.expiresIn });
   }));
 
   app.get('/api/plex/signin/:id', wrap(async (req, res) => {
     const s = liveSignin(req.params.id);
+    if (!s.pin) return res.json({ state: 'waiting' });
     if (!s.servers) {
       const tv = await plexTv();
       let token;
@@ -294,17 +339,21 @@ export function createApp({
     }
     res.json({
       state: 'done',
-      servers: s.servers.map(({ serverId, name, owned, ownerName, addresses }) => {
+      // `choice` picks the exact entry, even if two servers ever claimed the same id.
+      servers: s.servers.map(({ serverId, name, owned, ownerName, addresses }, choice) => {
         const plain = addresses.find((a) => a.startsWith('http://'));
-        return { serverId, name, owned, ownerName, address: plain ? new URL(plain).host : null };
+        return { choice, serverId, name, owned, ownerName, address: plain ? new URL(plain).host : null };
       }),
     });
   }));
 
   app.post('/api/plex/signin/:id/choose', wrap(async (req, res) => {
     const s = liveSignin(req.params.id);
-    const server = s.servers?.find((x) => x.serverId === req.body?.serverId);
-    if (!server) throw httpError(400, 'Choose one of the listed servers');
+    const pick = req.body?.choice;
+    const server = Number.isInteger(pick) ? s.servers?.[pick] : s.servers?.find((x) => x.serverId === req.body?.serverId);
+    if (!server || (req.body?.serverId != null && server.serverId !== req.body.serverId)) {
+      throw httpError(400, 'Choose one of the listed servers');
+    }
     const url = await findWorkingUrl(server);
     if (!url) {
       throw httpError(
@@ -312,7 +361,7 @@ export function createApp({
         `Could not reach "${server.name}" at any of the addresses Plex knows for it. Is it switched on and on this network?`,
       );
     }
-    const result = await connectTo({ url, token: server.accessToken, accountToken: s.accountToken });
+    const result = await connectTo({ url, token: server.accessToken, accountToken: s.accountToken, owned: server.owned });
     signins.delete(String(req.params.id));
     res.json(result);
   }));
@@ -329,7 +378,10 @@ export function createApp({
     const { serverId, plexAccountToken } = config.data;
     healing = (async () => {
       const servers = await (await plexTv()).servers(plexAccountToken);
-      const server = servers.find((x) => x.serverId === serverId);
+      // Same id and same ownership as the server that was chosen; your own servers first.
+      const matches = servers.filter((x) => x.serverId === serverId);
+      const server =
+        matches.find((x) => config.data.plexOwned == null || x.owned === config.data.plexOwned) ?? null;
       if (!server) return false;
       const url = await findWorkingUrl(server);
       if (!url || url === config.data.plexUrl) return false;

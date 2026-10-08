@@ -30,16 +30,27 @@ export function newProgress() {
   };
 }
 
+/**
+ * Runs fn over items with at most `limit` in flight. If one call throws, no new items are
+ * started, every worker is waited for (nothing keeps running after we return), and the first
+ * error is rethrown.
+ */
 async function mapPool(items, limit, fn, signal) {
   let next = 0;
+  let failed = null;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (!signal?.aborted) {
+    while (!signal?.aborted && !failed) {
       const i = next++;
       if (i >= items.length) return;
-      await fn(items[i], i);
+      try {
+        await fn(items[i], i);
+      } catch (err) {
+        failed ??= err;
+      }
     }
   });
   await Promise.all(workers);
+  if (failed) throw failed;
 }
 
 const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
@@ -234,8 +245,14 @@ export async function runImport({ plex, store, libraries, progress, signal, maxC
     progress.message = parts.join('. ');
   } catch (err) {
     await writes.catch(() => {});
-    progress.state = 'error';
-    progress.message = err.message;
+    if (signal?.aborted) {
+      // e.g. cancelled while Plex was still listing a library
+      progress.state = 'cancelled';
+      progress.message = 'Import cancelled; nothing was removed';
+    } else {
+      progress.state = 'error';
+      progress.message = err.message;
+    }
   } finally {
     progress.finishedAt = Date.now();
   }
@@ -294,11 +311,21 @@ async function importPictures({ plex, store, tmdb, listed, progress, signal }) {
           done += 1;
           pending.push(result);
           onHit(result);
-          if (pending.length >= LOGO_WRITE_BATCH) await flush();
+          if (pending.length >= LOGO_WRITE_BATCH) {
+            try {
+              await flush();
+            } catch (err) {
+              stop ??= err; // a failed save also stops the remaining lookups
+            }
+          }
         },
         signal,
       );
-      await flush();
+      try {
+        await flush(); // keep what was looked up before any stop
+      } catch (err) {
+        stop ??= err;
+      }
       return { done, stop };
     };
 
